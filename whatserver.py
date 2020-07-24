@@ -7,7 +7,13 @@ import requests
 import Queue
 import sys
 import re
-
+import chardet
+import requests
+import re
+import time
+import struct
+import socket
+import gc
 #ip to num
 def ip2num(ip):
     ip = [int(x) for x in ip.split('.')]
@@ -51,6 +57,24 @@ class tThread(threading.Thread):
                 checkServer(host)
             except:
                 continue
+def int_dec(pagehtml):
+	charset = None
+	if pagehtml != '':
+		enc = chardet.detect(pagehtml)
+		if enc['encoding'] and enc['confidence'] > 0.9:
+			charset = enc['encoding']
+		if charset == None:
+			charset_re = re.compile("((^|;)\s*charset\s*=)([^\"']*)", re.M)
+			charset = charset_re.search(pagehtml[:1000])
+			charset = charset and charset.group(3) or None
+		try:
+			if charset:
+				unicode('test', charset, errors='replace')
+		except Exception, e:
+			print 'Exception', e
+			charset = None
+	# print 'charset=', charset
+	return charset
 
 def checkServer(host):
 
@@ -61,8 +85,21 @@ def checkServer(host):
             aimurl = "http://"+host+":"+str(k)
 
             response = requests.get(url=aimurl,timeout=5)
+            #增加对网页编码的解析
+            body = response.content
+            charset = None
+            if body != '':
+            	charset = int_dec(body)
+            if charset == None or charset == 'ascii':
+            	charset = 'ISO-8859-1'
+            if charset and charset != 'ascii' and charset != 'unicode':
+            	try:
+            		body = unicode(body, charset, errors='replace')
+            	except Exception, e:
+            		body = ''
+
             serverText = response.headers['server']
-            titleText = re.findall(r'<title>(.*?)</title>',response.text)[0] 
+            titleText = re.findall(r'<title>(.*?)</title>',body)[0] 
 
             if len(serverText) > 0:
                 print  "-"*50+"\n"+aimurl +"\nServer: "+serverText +"\nTitle: "+titleText
